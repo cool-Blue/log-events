@@ -1,0 +1,19 @@
+{
+  "name": "logevents",
+  "version": "1.0.0",
+  "description": "listens to an array of events on an object and outputs to a specified file or stream",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "log",
+    "stream",
+    "events"
+  ],
+  "author": "cool.blue",
+  "license": "MIT",
+  "dependencies": {
+    "moment": "^2.14.1"
+  }
+}
