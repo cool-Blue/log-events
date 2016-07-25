@@ -1,0 +1,50 @@
+[ 'event_2' ]
+[ 'event_1', 'event_6' ]
+[ 'event_6',
+  'event_4',
+  'event_3',
+  'event_1',
+  'event_0',
+  'event_7',
+  'event_5' ]
+[ 'event_9',
+  'event_8',
+  'event_6',
+  'event_7',
+  'event_2',
+  'event_3',
+  'event_4',
+  'event_5',
+  'event_1',
+  'event_0' ]
+[ 'event_6', 'event_8', 'event_5', 'event_4', 'event_3' ]
+[ 'event_2',
+  'event_1',
+  'event_8',
+  'event_4',
+  'event_5',
+  'event_0',
+  'event_9',
+  'event_6',
+  'event_3',
+  'event_7' ]
+[ 'event_5',
+  'event_4',
+  'event_8',
+  'event_0',
+  'event_6',
+  'event_1',
+  'event_3',
+  'event_9',
+  'event_7' ]
+[ 'event_5', 'event_7' ]
+[ 'event_9',
+  'event_1',
+  'event_4',
+  'event_0',
+  'event_6',
+  'event_7',
+  'event_3',
+  'event_2',
+  'event_5' ]
+[ 'event_5', 'event_8', 'event_4', 'event_0', 'event_1' ]

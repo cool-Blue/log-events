@@ -4,20 +4,26 @@
 
 module.exports = listenAll;
 
+const outputError = new TypeError('log-events un-supported output type');
 var fs = require('fs');
 var util = require('util');
 var now = require('moment');
 var stream = require('stream');
+
 
 function listenAll (output) {
     var _pad        = require('left-pad'),
         _w = 0, _w2 = 0;
     var fd, _logStream;
 
-    if(output) {
-        _logStream = (output instanceof require("events") && typeof output.write === 'function')
-            ? output
-            : fs.createWriteStream(output);
+    if(_logStream = output) {
+        if(!(output instanceof require("events") && typeof output.write === 'function')){
+            // not a write stream
+            if(typeof output === 'string')
+                _logStream = fs.createWriteStream(output);
+            else
+                throw outputError;
+        }
         _logStream.on('finish', function() {
             console.log('file has been written');
         });
@@ -44,4 +50,8 @@ function listenAll (output) {
             if(!_logStream.ended) _logStream.end()
         }
     }
+}
+
+if(process.env.NODE_ENV === 'test') {
+    module.exports.errors = {outputError: outputError};
 }
