@@ -1,5 +1,5 @@
 {
-  "name": "logevents",
+  "name": "@cool-blue/logevents",
   "version": "1.0.0",
   "description": "listens to an array of events on an object and outputs to a specified file or stream",
   "main": "index.js",
@@ -15,5 +15,14 @@
   "license": "MIT",
   "dependencies": {
     "moment": "^2.14.1"
-  }
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cool-Blue/log-events.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cool-Blue/log-events/issues"
+  },
+  "homepage": "https://github.com/cool-Blue/log-events#readme"
 }

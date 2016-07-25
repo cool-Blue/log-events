@@ -44,4 +44,4 @@ function listenAll (output) {
             if(!_logStream.ended) _logStream.end()
         }
     }
-};
+}
