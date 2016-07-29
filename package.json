@@ -1,6 +1,6 @@
 {
   "name": "@cool-blue/logevents",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "listens to an array of events on an object and outputs to a specified file or stream",
   "main": "index.js",
   "scripts": {

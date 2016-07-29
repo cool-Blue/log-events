@@ -47,7 +47,7 @@ function listenAll (output) {
                 if(!_excl || !_excl.find(x => x === e))
                     host.on(e, function(evt) {
                         var stamp = now(Date.now()).format("HH:mm:s:SSSS");
-                        _log(`${ESC}${BOLD};${BLUE}m${stamp}\t${_pad(host.name, _w)} --> ${e}${ESC}m`)
+                        _log(`${ESC}${BOLD};${YELLOW}m${stamp}\t${_pad(host.name, _w)} --> ${e}${ESC}m`)
                     })
             })
     }
