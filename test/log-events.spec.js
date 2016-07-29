@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const glob = require('glob');
 const expect = require('chai').expect;
-const hookSTDOUT = require('intercept-stdout');
+const HOOKstdout = require('intercept-stdout');
 const EventEmitter = require('events');
 
 const n = 10;
@@ -69,7 +69,7 @@ describe('log-events', function() {
             expect(events.reduce(function(res, e, i, a) {
                 var m       = _.random(a.length),
                     exclude = _.sampleSize(a, m);
-                console.log(exclude);
+                // console.log(exclude);
                 testEmitter = new EventEmitter();
                 logEvents().open(testEmitter, a, exclude);
                 return (
@@ -116,12 +116,35 @@ describe('log-events', function() {
         });
 
         describe('when the bound object emits events', function() {
-            it('if the output is undefined, or falsey, logs to stdout', function() {
+            var unhook_stdout, _logOut;
+            beforeEach(function(){
+                _logOut = "";
+                unhook_stdout = HOOKstdout(function(txt) {
+                    _logOut += `${txt}`;
+                    return '^' + txt;
+                });
+            });
+            afterEach(function(){
+                unhook_stdout();
+            });
 
-            })
+            it('if the output is undefined, or falsey, logs to stdout', function() {
+                testEmitter.name = 'output-to-stdout';
+                logEvents().open(testEmitter, events);
+                events.forEach(e => testEmitter.emit(e, e));
+                var outLines =  _logOut.replace(/\n$/,"").split('\n');
+
+                expect(outLines.length).to.equal(events.length);
+
+                events.forEach((e, i) => {
+                    expect(outLines[i]).to.include(e)
+                });
+
+                console.log(`\n\n${_logOut}`);
+            });
             it('if passed a write stream, streams event logs', function() {
 
-            })
+            });
             it('if a valid path is provided, logs to a file', function() {
 
             })

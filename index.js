@@ -9,6 +9,14 @@ var fs = require('fs');
 var util = require('util');
 var now = require('moment');
 var stream = require('stream');
+var ESC = '\x1b[',
+    gEND = "m",
+    allOFF = `${ESC}0m`,
+    BOLD = '1',
+    WHITE = '37',
+    GREEN = '32',
+    YELLOW = '33',
+    BLUE = '34';
 
 
 function listenAll (output) {
@@ -39,7 +47,7 @@ function listenAll (output) {
                 if(!_excl || !_excl.find(x => x === e))
                     host.on(e, function(evt) {
                         var stamp = now(Date.now()).format("HH:mm:s:SSSS");
-                        _log(`${stamp}\t${_pad(host.name, _w)} --> ${e}`)
+                        _log(`${ESC}${BOLD};${BLUE}m${stamp}\t${_pad(host.name, _w)} --> ${e}${ESC}m`)
                     })
             })
     }
