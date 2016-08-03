@@ -17,6 +17,7 @@ const path = require('path');
 const glob = require('glob');
 const expect = require('chai').expect;
 const HOOKstdout = require('intercept-stdout');
+const random = require('random-js')();
 const EventEmitter = require('events');
 
 const n = 10;
@@ -45,7 +46,7 @@ describe('log-events', function() {
         testEmitter = new EventEmitter()
     });
 
-    describe('when binding', function() {
+    describe('when binding with an array of event types', function() {
 
         it('should add a listener to all events in the events array', function(done) {
             logEvents().open(testEmitter, events);
@@ -96,6 +97,36 @@ describe('log-events', function() {
         })
 
     });
+
+    describe('when binding with an array of descriptor objects', function(){
+        var objEvents = events.map(function(e){
+            return {
+                type: e,
+                action: function(){ console.log(this.name) }
+            }
+        });
+        const m = 4;
+        var sampleEvents = random.sample(objEvents, m);
+
+        it('should add a listener to all events with add_remove missing', function(done) {
+            logEvents().open(testEmitter, objEvents);
+            expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
+            done();
+        });
+        it('should remove listeners with add_remove === false', function(done) {
+            const remEvents = sampleEvents.map(function(e){
+                e.add_remove = false;
+                return e
+            })
+            logEvents().open(testEmitter, events);
+            expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
+
+            logEvents().open(testEmitter, remEvents);
+            expect(objEvents.map(ex => testEmitter.listenerCount(ex)).every(x => x === 0)).to.equal(true);
+            done();
+        });
+
+    })
 
     describe('output', function() {
 
