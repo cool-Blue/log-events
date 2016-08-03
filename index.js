@@ -8,24 +8,34 @@ const outputError = new TypeError('log-events un-supported output type');
 var fs = require('fs');
 var util = require('util');
 var now = require('moment');
+var _pad = require('left-pad');
 var stream = require('stream');
-var ESC = '\x1b[',
-    gEND = "m",
+var ESC    = '\x1b[',
+    gEND   = "m",
     allOFF = `${ESC}0m`,
-    BOLD = '1',
-    WHITE = '37',
-    GREEN = '32',
+    BOLD   = '1',
+    WHITE  = '37',
+    GREEN  = '32',
     YELLOW = '33',
-    BLUE = '34';
+    BLUE   = '34';
 
-
-function listenAll (output) {
-    var _pad        = require('left-pad'),
-        _w = 0, _w2 = 0;
+function stamp() {
+    var t    = process.hrtime()[1].toString(),
+        T = now(Date.now()).format("HH:mm:ss"),
+        msec = t.slice(0, 3),
+        usec = t.slice(3, 6),
+        nsec = t.slice(6, 9),
+        pad  = '000';
+    usec = pad.substring(0, pad.length - usec.length) + usec;
+    var ret = T + ":" +  msec + ":" + usec + ":" + nsec;
+    return ret
+}
+function listenAll(output) {
+    var _w = 0, _w2 = 0;
     var fd, _logStream;
 
     if(_logStream = output) {
-        if(!(output instanceof require("events") && typeof output.write === 'function')){
+        if(!(output instanceof require("events") && typeof output.write === 'function')) {
             // not a write stream
             if(typeof output === 'string')
                 _logStream = fs.createWriteStream(output);
@@ -46,8 +56,7 @@ function listenAll (output) {
                 _w2 = Math.max(e.length, _w2);
                 if(!_excl || !_excl.find(x => x === e))
                     host.on(e, function(evt) {
-                        var stamp = now(Date.now()).format("HH:mm:s:SSSS");
-                        _log(`${ESC}${BOLD};${YELLOW}m${stamp}\t${_pad(host.name, _w)} --> ${e}${ESC}m`)
+                        _log(`${ESC}${BOLD};${YELLOW}m${stamp()}\t${_pad(host.name, _w)} --> ${e}${ESC}m`)
                     })
             })
     }
@@ -56,7 +65,8 @@ function listenAll (output) {
         open: _listenAll,
         close: function() {
             if(!_logStream.ended) _logStream.end()
-        }
+        },
+        stamp: stamp
     }
 }
 

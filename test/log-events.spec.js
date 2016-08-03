@@ -6,6 +6,7 @@
 /**
  * SUT
  * */
+delete require.cache[require.resolve('..')];
 const logEvents = require('..');
 /**
  * dependencies
@@ -22,6 +23,19 @@ const n = 10;
 const events = Array.apply(null, Array(n)).map((x, i) => `event_${i}`);
 var testEmitter;
 
+
+describe('behaviour', function(){
+    it('exports open, close and stamp', function(){
+        expect(logEvents().open).to.be.a('function')
+        expect(logEvents().close).to.be.a('function')
+        expect(logEvents().stamp).to.be.a('function')
+    });
+    it('should format the time stamp', function(){
+        var l = logEvents().stamp();
+        console.log(l);
+        expect(l).to.match(/^\d{2}:\d{2}:\d{2}:\d{3}:\d{3}/)
+    })
+});
 describe('log-events', function() {
     const baseDir = './test';
     const inputDir = '/fixtures';
@@ -105,8 +119,8 @@ describe('log-events', function() {
                 expect(() => logEvents(outStream).open(testEmitter, events))
                     .to.not.throw();
             });
-            it('if passed a read stream, it doesn\'t throw', function() {
-                expect(() => logEvents(inStream).open(testEmitter, events))
+            it('if passed a read stream, it throws ' + logEvents.errors.outputError, function() {
+                expect(function (){logEvents(inStream).open(testEmitter, events)})
                     .to.throw(logEvents.errors.outputError);
             });
             it('if a valid path is provided, logs to a file', function() {
