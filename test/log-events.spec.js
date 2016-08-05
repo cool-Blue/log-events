@@ -13,6 +13,7 @@ const logEvents = require('..');
  * */
 const _ = require('lodash');
 const fs = require('fs');
+const util = require('util');
 const path = require('path');
 const glob = require('glob');
 const expect = require('chai').expect;
@@ -21,15 +22,18 @@ const random = require('random-js')();
 const EventEmitter = require('events');
 
 const n = 10;
-const events = Array.apply(null, Array(n)).map((x, i) => `event_${i}`);
+const range = Array.apply(null, Array(n)).map((x, i) => i);
+const events = range.map((x, i) => `event_${i}`);
 var testEmitter;
 
+const log = logEvents().logger().prefix('none');
 
 describe('behaviour', function(){
     it('exports open, close and stamp', function(){
         expect(logEvents().open).to.be.a('function')
         expect(logEvents().close).to.be.a('function')
         expect(logEvents().stamp).to.be.a('function')
+        expect(logEvents().logger).to.be.a('function')
     });
     it('should format the time stamp', function(){
         var l = logEvents().stamp();
@@ -43,7 +47,8 @@ describe('log-events', function() {
     const outputDir = '/output';
 
     beforeEach(function() {
-        testEmitter = new EventEmitter()
+        testEmitter = new EventEmitter();
+        testEmitter.name = 'testEmitter'
     });
 
     describe('when binding with an array of event types', function() {
@@ -106,27 +111,123 @@ describe('log-events', function() {
             }
         });
         const m = 4;
-        var sampleEvents = random.sample(objEvents, m);
+        const sampleSet = random.sample(range, m);
+        var sampleEvents = sampleSet.map(x => events[x]);
 
         it('should add a listener to all events with add_remove missing', function(done) {
             logEvents().open(testEmitter, objEvents);
             expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
+            log.h1('After');
+            console.log(util.inspect(testEmitter));
             done();
         });
         it('should remove listeners with add_remove === false', function(done) {
-            const remEvents = sampleEvents.map(function(e){
-                e.add_remove = false;
-                return e
-            })
-            logEvents().open(testEmitter, events);
-            expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
+            const objSampleEvents = sampleEvents.map(function(e){
+                return {
+                    type: e,
+                    action: function(){ console.log(this.name) },
+                    add_remove: false
+                }
+            });
 
-            logEvents().open(testEmitter, remEvents);
-            expect(objEvents.map(ex => testEmitter.listenerCount(ex)).every(x => x === 0)).to.equal(true);
+            // build a new EE with one listener on each event
+            logEvents().open(testEmitter, events);
+            expect(testEmitter._eventsCount).to.equal(n);
+            log.h1('Before');
+            console.log(util.inspect(testEmitter));
+
+            // try to remove the sample events
+            logEvents().open(testEmitter, objSampleEvents);
+            // check that the removed events have no listeners
+            expect(testEmitter._eventsCount).to.equal(n - m);
+            log.h1('After');
+            console.log(util.inspect(testEmitter));
             done();
         });
+        it('should add or remove listeners depending on add_remove', function(done) {
+            const objSampleEvents = sampleEvents.map(function(e){
+                return {
+                    type: e,
+                    action: function(){ console.log(this.name) },
+                    add_remove: false
+                }
+            });
 
-    })
+            // build a new EE with one listener on each event
+            logEvents().open(testEmitter, events);
+            expect(testEmitter._eventsCount).to.equal(n);
+
+            // remove the sample events
+            logEvents().open(testEmitter, objSampleEvents);
+            // check that they were removed
+            expect(testEmitter._eventsCount).to.equal(n - m);
+            log.h1('Before');
+            console.log(util.inspect(testEmitter));
+
+            // remove the remaining listeners and add back the sample events
+            var mixedEvents = events.map(function(e) {
+                return {
+                    type: e,
+                    action: function() {console.log(this.name)},
+                    add_remove: false
+                }
+            });
+            sampleSet.forEach((s) => mixedEvents[s].add_remove = true);
+
+            logEvents().open(testEmitter, mixedEvents);
+
+            // check that the removed events have no listeners
+            expect(testEmitter._eventsCount).to.equal(m);
+            log.h1('After');
+            console.log(util.inspect(testEmitter));
+            done();
+        });
+        it('should replace existing, registered listeners', function(done) {
+            logEvents().open(testEmitter, objEvents);
+            log.h1('Before');
+            console.log(util.inspect(testEmitter));
+            logEvents().open(testEmitter, objEvents);
+            expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
+            log.h1('After');
+            console.log(util.inspect(testEmitter));
+            done();
+        });
+        it('should not affect unregistered listeners', function(done) {
+            logEvents().open(testEmitter, events);
+
+            function unRegL(e){log.event('testEmitter', 0, `unregistered ${e}`)}
+            events.forEach( e => testEmitter.on(e, unRegL));
+
+            expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 2)).to.equal(true);
+
+            log.h1('Before');
+            console.log(util.inspect(testEmitter));
+            log.h1('Should log two of each');
+            events.forEach(e => testEmitter.emit(e, e));
+
+            logEvents().open(testEmitter, events.map( function(e) {
+                return {type: e, add_remove: false}
+            }));
+            expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
+            log.h1('After');
+            log.h2('Should log one of each');
+            events.forEach(e => testEmitter.emit(e, e));
+            console.log(util.inspect(testEmitter));
+            done();
+        });
+        it('should execute the passed action on the host object', function(done) {
+            var objEvents = events.map(function(e){
+                return {
+                    type: e,
+                    action: function(){ log.h2(`${this.name} ${e}`) }
+                }
+            });
+            logEvents().open(testEmitter, objEvents);
+            log.h1('Should print emitter name');
+            events.forEach(e => testEmitter.emit(e, e));
+            done();
+        });
+    });
 
     describe('output', function() {
 

@@ -1,0 +1,18 @@
+{
+  "name": "test",
+  "version": "1.0.0",
+  "description": "test log-events",
+  "main": "log-events.spec.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "cool.blue",
+  "license": "MIT",
+  "dependencies": {
+    "glob": "^7.0.5",
+    "intercept-stdout": "^0.1.2",
+    "chai": "^1.10.0",
+    "lodash": "^4.14.0",
+    "random-js": "^1.0.8"
+  }
+}
