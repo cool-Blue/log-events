@@ -10,8 +10,9 @@ const assert = require('assert');
 // set up a emitter with n events
 const n = 10;
 const events = Array.apply(null, Array(n)).map((x, i) => 'event_' + i);
-
-const log = require('..')().logger().prefix('none');
+const  m = 4;
+const sampleEvents = random.sample(events, m);
+const log = require('..')().logger();
 
 
 /*// get a reference to one of the listener functions
@@ -210,8 +211,7 @@ events.forEach((e) => wrap.emit(e, e));
 assert.equal(wrap._eventsCount, n, 'events added');
 console.log('\nwatched object:\n' + wrap.structure());
 
-var sampleEvents, m = 4;
-wrap.unWatchEvents(sampleEvents = random.sample(events, m));
+wrap.unWatchEvents(sampleEvents);
 assert.equal(wrap._eventsCount, n - m);
 console.log('\nremove some:\n' + wrap.structure());
 

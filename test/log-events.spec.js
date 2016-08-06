@@ -26,19 +26,69 @@ const range = Array.apply(null, Array(n)).map((x, i) => i);
 const events = range.map((x, i) => `event_${i}`);
 var testEmitter;
 
-const log = logEvents().logger().prefix('none');
+const hook = logEvents().open;
+const log = logEvents().logger();
 
 describe('behaviour', function(){
-    it('exports open, close and stamp', function(){
+
+    log.h1('Start');
+
+    it('exports the right behaviour', function(){
         expect(logEvents().open).to.be.a('function')
+        expect(logEvents().open.defaultActions).to.be.a('function')
         expect(logEvents().close).to.be.a('function')
         expect(logEvents().stamp).to.be.a('function')
         expect(logEvents().logger).to.be.a('function')
+        expect(logEvents().logger().fancy).to.be.a('function')
+        expect(logEvents().logger().plain).to.be.a('function')
     });
     it('should format the time stamp', function(){
         var l = logEvents().stamp();
-        console.log(l);
+        log(l);
         expect(l).to.match(/^\d{2}:\d{2}:\d{2}:\d{3}:\d{3}/)
+    });
+    it('should manage default behaviour', function(){
+        var _open = logEvents().open,
+            d, p = 'testType', f = function(){ return this}, o = {};
+        o[p] = f;
+
+        // check that the default objects is returned when no arguments
+        expect(d = _open.defaultActions()).to.be.an('object');
+
+        // add a type to the default behaviour
+        // (it doesn't check to see if there is a matching event
+        _open.defaultActions([o]);
+        expect(_open.defaultActions()[p])
+            .to.equal(f);
+
+        // remove a type from the default behaviour
+        o[p] = null;
+        _open.defaultActions([o]);
+        expect(_open.defaultActions()[p])
+            .to.be.an("undefined");
+
+        // check that the default behaviour is executed when the event is logged
+        testEmitter = new EventEmitter();
+        testEmitter.name = 'testEmitter';
+        // mock a stream
+        testEmitter.unshift = function(chunk){this[chunk] = chunk};
+
+        // add the test events to the emitter
+        var defEvents = ['data', 'end'];
+        _open(testEmitter, defEvents);
+        log.h1('should have unshift added and the default events');
+        log(util.inspect(testEmitter));
+
+        // emit the events and check that the default behaviour was done
+        defEvents.forEach(function(e){
+            testEmitter.emit(e, e);
+        });
+        log.h1(`should have ${defEvents.join(" & ")} members added`);
+        log(util.inspect(testEmitter));
+
+        defEvents.forEach(function(e){
+            expect(testEmitter[e]).to.equal(e);
+        })
     })
 });
 describe('log-events', function() {
@@ -51,15 +101,15 @@ describe('log-events', function() {
         testEmitter.name = 'testEmitter'
     });
 
-    describe('when binding with an array of event types', function() {
+    describe('when binding with an array of types', function() {
 
         it('should add a listener to all events in the events array', function(done) {
-            logEvents().open(testEmitter, events);
+            hook(testEmitter, events);
             expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
             done();
         });
         it('should use a unique execution context for each listener and handle [] for excludes', function(done) {
-            logEvents().open(testEmitter, events, []);
+            hook(testEmitter, events, []);
             expect(events
                 .map(ex => testEmitter.listeners(ex)[0])
                 .every((x, i, a) => x === a[0])).to.equal(false);
@@ -67,7 +117,7 @@ describe('log-events', function() {
             done();
         });
         it('should use the same source code for all listeners and handle undefined for excludes', function(done) {
-            logEvents().open(testEmitter, events, undefined);
+            hook(testEmitter, events, undefined);
             expect(events
                 .map(ex => testEmitter.listeners(ex)[0])
                 .every((x, i, a) => x.toString() === a[0].toString())).to.equal(true);
@@ -77,7 +127,7 @@ describe('log-events', function() {
         it('should ignore any excluded single events passed as a string', function() {
             expect(events.reduce(function(res, e) {
                 testEmitter = new EventEmitter();
-                logEvents().open(testEmitter, events, e);
+                hook(testEmitter, events, e);
                 return (
                     res
                     && testEmitter._eventsCount == events.length - 1
@@ -89,9 +139,9 @@ describe('log-events', function() {
             expect(events.reduce(function(res, e, i, a) {
                 var m       = _.random(a.length),
                     exclude = _.sampleSize(a, m);
-                // console.log(exclude);
+                // log(exclude);
                 testEmitter = new EventEmitter();
-                logEvents().open(testEmitter, a, exclude);
+                hook(testEmitter, a, exclude);
                 return (
                     res && testEmitter._eventsCount == a.length - m
                     && exclude.reduce(
@@ -107,7 +157,7 @@ describe('log-events', function() {
         var objEvents = events.map(function(e){
             return {
                 type: e,
-                action: function(){ console.log(this.name) }
+                action: function(){ log(this.name) }
             }
         });
         const m = 4;
@@ -115,104 +165,104 @@ describe('log-events', function() {
         var sampleEvents = sampleSet.map(x => events[x]);
 
         it('should add a listener to all events with add_remove missing', function(done) {
-            logEvents().open(testEmitter, objEvents);
+            hook(testEmitter, objEvents);
             expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
             log.h1('After');
-            console.log(util.inspect(testEmitter));
+            log(util.inspect(testEmitter));
             done();
         });
         it('should remove listeners with add_remove === false', function(done) {
             const objSampleEvents = sampleEvents.map(function(e){
                 return {
                     type: e,
-                    action: function(){ console.log(this.name) },
+                    action: function(){ log(this.name) },
                     add_remove: false
                 }
             });
 
-            // build a new EE with one listener on each event
-            logEvents().open(testEmitter, events);
+            // build a new EE with one listener on each h3
+            hook(testEmitter, events);
             expect(testEmitter._eventsCount).to.equal(n);
             log.h1('Before');
-            console.log(util.inspect(testEmitter));
+            log(util.inspect(testEmitter));
 
             // try to remove the sample events
-            logEvents().open(testEmitter, objSampleEvents);
+            hook(testEmitter, objSampleEvents);
             // check that the removed events have no listeners
             expect(testEmitter._eventsCount).to.equal(n - m);
             log.h1('After');
-            console.log(util.inspect(testEmitter));
+            log(util.inspect(testEmitter));
             done();
         });
         it('should add or remove listeners depending on add_remove', function(done) {
             const objSampleEvents = sampleEvents.map(function(e){
                 return {
                     type: e,
-                    action: function(){ console.log(this.name) },
+                    action: function(){ log(this.name) },
                     add_remove: false
                 }
             });
 
-            // build a new EE with one listener on each event
-            logEvents().open(testEmitter, events);
+            // build a new EE with one listener on each h3
+            hook(testEmitter, events);
             expect(testEmitter._eventsCount).to.equal(n);
 
             // remove the sample events
-            logEvents().open(testEmitter, objSampleEvents);
+            hook(testEmitter, objSampleEvents);
             // check that they were removed
             expect(testEmitter._eventsCount).to.equal(n - m);
             log.h1('Before');
-            console.log(util.inspect(testEmitter));
+            log(util.inspect(testEmitter));
 
             // remove the remaining listeners and add back the sample events
             var mixedEvents = events.map(function(e) {
                 return {
                     type: e,
-                    action: function() {console.log(this.name)},
+                    action: function() {log(this.name)},
                     add_remove: false
                 }
             });
             sampleSet.forEach((s) => mixedEvents[s].add_remove = true);
 
-            logEvents().open(testEmitter, mixedEvents);
+            hook(testEmitter, mixedEvents);
 
             // check that the removed events have no listeners
             expect(testEmitter._eventsCount).to.equal(m);
             log.h1('After');
-            console.log(util.inspect(testEmitter));
+            log(util.inspect(testEmitter));
             done();
         });
         it('should replace existing, registered listeners', function(done) {
-            logEvents().open(testEmitter, objEvents);
+            hook(testEmitter, objEvents);
             log.h1('Before');
-            console.log(util.inspect(testEmitter));
-            logEvents().open(testEmitter, objEvents);
+            log(util.inspect(testEmitter));
+            hook(testEmitter, objEvents);
             expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
             log.h1('After');
-            console.log(util.inspect(testEmitter));
+            log(util.inspect(testEmitter));
             done();
         });
         it('should not affect unregistered listeners', function(done) {
-            logEvents().open(testEmitter, events);
+            hook(testEmitter, events);
 
-            function unRegL(e){log.event('testEmitter', 0, `unregistered ${e}`)}
+            function unRegL(e){log.h2('testEmitter', 0, `unregistered ${e}`)}
             events.forEach( e => testEmitter.on(e, unRegL));
 
             expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 2)).to.equal(true);
 
             log.h1('Before');
-            console.log(util.inspect(testEmitter));
+            log(util.inspect(testEmitter));
             log.h1('Should log two of each');
             events.forEach(e => testEmitter.emit(e, e));
 
-            logEvents().open(testEmitter, events.map( function(e) {
+            hook(testEmitter, events.map( function(e) {
                 return {type: e, add_remove: false}
             }));
             expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
             log.h1('After');
             log.h2('Should log one of each');
             events.forEach(e => testEmitter.emit(e, e));
-            console.log(util.inspect(testEmitter));
+            log(util.inspect(testEmitter));
             done();
         });
         it('should execute the passed action on the host object', function(done) {
@@ -222,7 +272,7 @@ describe('log-events', function() {
                     action: function(){ log.h2(`${this.name} ${e}`) }
                 }
             });
-            logEvents().open(testEmitter, objEvents);
+            hook(testEmitter, objEvents);
             log.h1('Should print emitter name');
             events.forEach(e => testEmitter.emit(e, e));
             done();
@@ -286,14 +336,14 @@ describe('log-events', function() {
                     expect(outLines[i]).to.include(e)
                 });
 
-                console.log(`\n\n${_logOut}`);
+                log(`\n\n${_logOut}`);
             });
-            it('if passed a write stream, streams event logs', function() {
+            it('if passed a write stream, streams h3 logs', function() {
 
             });
             it('if a valid path is provided, logs to a file', function() {
 
             })
         })
-    })
+    });
 });
