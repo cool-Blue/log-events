@@ -42,6 +42,16 @@ describe('behaviour', function(){
         expect(logEvents().logger().fancy).to.be.a('function')
         expect(logEvents().logger().plain).to.be.a('function')
     });
+    it('should be chainable', function(){
+        var h = new EventEmitter(),
+            log = logEvents().logger();
+
+        h.name = 'host';
+
+        expect(logEvents().open(h, events)).to.equal(h);
+        expect(log.fancy()).to.equal(log);
+        expect(log.plain()).to.equal(log);
+    });
     it('should format the time stamp', function(){
         var l = logEvents().stamp();
         log(l);

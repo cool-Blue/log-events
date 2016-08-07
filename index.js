@@ -106,6 +106,7 @@ function colourLog(log) {
 function LogEvents(output) {
     var _w = 0, _w2 = 0;
     var fd, _logStream;
+    var _host;
 
     function _unShift(chunk) {
         if (chunk && this.unshift) this.unshift(chunk)
@@ -191,7 +192,8 @@ function LogEvents(output) {
                     reg[type] = listener;
                     host.on(type, listener)
                 }
-            })
+            });
+        return _host = host;
     }
 
     /**
