@@ -7,7 +7,7 @@
  * SUT
  * */
 delete require.cache[require.resolve('..')];
-const logEvents = require('..');
+const LogEvents = require('..');
 /**
  * dependencies
  * */
@@ -16,50 +16,58 @@ const fs = require('fs');
 const util = require('util');
 const path = require('path');
 const glob = require('glob');
-const expect = require('chai').expect;
+const chai = require('chai');
+const expect = chai.expect;
+const sinon = require('sinon');
+const sinonChai = require('sinon-chai');
+chai.use(sinonChai);
 const HOOKstdout = require('intercept-stdout');
 const random = require('random-js')();
 const EventEmitter = require('events');
+
+const ManagedReadStream = require('./lib/observable-streams')
+    .ManagedReadStream;
 
 const n = 10;
 const range = Array.apply(null, Array(n)).map((x, i) => i);
 const events = range.map((x, i) => `event_${i}`);
 var testEmitter;
 
-const hook = logEvents().open;
-const log = logEvents().logger();
+const hook = LogEvents().open;
+const log = LogEvents().logger();
 
-describe('behaviour', function(){
+describe('behaviour', function() {
 
     log.h1('Start');
 
-    it('exports the right behaviour', function(){
-        expect(logEvents().open).to.be.a('function')
-        expect(logEvents().open.defaultActions).to.be.a('function')
-        expect(logEvents().close).to.be.a('function')
-        expect(logEvents().stamp).to.be.a('function')
-        expect(logEvents().logger).to.be.a('function')
-        expect(logEvents().logger().fancy).to.be.a('function')
-        expect(logEvents().logger().plain).to.be.a('function')
+    it('exports the right behaviour', function() {
+        expect(LogEvents().open).to.be.a('function')
+        expect(LogEvents().open.defaultActions).to.be.a('function')
+        expect(LogEvents().close).to.be.a('function')
+        expect(LogEvents().stamp).to.be.a('function')
+        expect(LogEvents().logger).to.be.a('function')
+        expect(LogEvents().logger().fancy).to.be.a('function')
+        expect(LogEvents().logger().plain).to.be.a('function')
     });
-    it('should be chainable', function(){
-        var h = new EventEmitter(),
-            log = logEvents().logger();
+    it('should be chainable', function() {
+        var h   = new EventEmitter(),
+            log = LogEvents().logger();
 
         h.name = 'host';
 
-        expect(logEvents().open(h, events)).to.equal(h);
+        expect(LogEvents().open(h, events)).to.equal(h);
+        expect(LogEvents().open(h, {type: "nonexistent", add_remove: null})).to.equal(h);
         expect(log.fancy()).to.equal(log);
         expect(log.plain()).to.equal(log);
     });
-    it('should format the time stamp', function(){
-        var l = logEvents().stamp();
+    it('should format the time stamp', function() {
+        var l = LogEvents().stamp();
         log(l);
         expect(l).to.match(/^\d{2}:\d{2}:\d{2}:\d{3}:\d{3}/)
     });
-    it('should manage default behaviour', function(){
-        var _open = logEvents().open,
-            d, p = 'testType', f = function(){ return this}, o = {};
+    it('should manage default behaviour', function() {
+        var _open                                               = LogEvents().open,
+            d, p = 'testType', f = function() { return this}, o = {};
         o[p] = f;
 
         // check that the default objects is returned when no arguments
@@ -81,7 +89,7 @@ describe('behaviour', function(){
         testEmitter = new EventEmitter();
         testEmitter.name = 'testEmitter';
         // mock a stream
-        testEmitter.unshift = function(chunk){this[chunk] = chunk};
+        testEmitter.unshift = function(chunk) {this[chunk] = chunk};
 
         // add the test events to the emitter
         var defEvents = ['data', 'end'];
@@ -90,16 +98,116 @@ describe('behaviour', function(){
         log(util.inspect(testEmitter));
 
         // emit the events and check that the default behaviour was done
-        defEvents.forEach(function(e){
+        defEvents.forEach(function(e) {
             testEmitter.emit(e, e);
         });
         log.h1(`should have ${defEvents.join(" & ")} members added`);
         log(util.inspect(testEmitter));
 
-        defEvents.forEach(function(e){
+        defEvents.forEach(function(e) {
             expect(testEmitter[e]).to.equal(e);
         })
     })
+});
+describe('colourLog', function() {
+    const content = "this is a test y89dpencjk";
+
+    describe('signalling', function(done) {
+        var CB = function(context, argtypes, done) {
+            return function cb() {
+                var self = this,
+                    _args = [].slice.call(arguments);
+                argtypes = Array.isArray(argtypes);
+                if (argtypes === ['undefined'])
+                    expect(arguments.length).to.equal(0);
+                else
+                    expect(_args).to.eql(argtypes);
+                expect(self).to.equal(context);
+                done()
+            }
+        }
+        describe('when logging to stdout, should signal with null context', function() {
+            it('calls back after logging is complete with no args', function(done) {
+                const testLog = LogEvents().logger();
+
+                function cb(e) {
+                    var self = this;
+                    expect(e).to.be.an("undefined");
+                    expect(self).to.equal(null);
+                    done()
+                }
+
+                testLog(content, cb);
+            });
+            it('calls asynchronously emits finish after logging is complete', function(done) {
+                const testLog = LogEvents().logger();
+                var cb = new CB(null,null, done)
+                var count = 1;
+
+                testLog(content);
+
+                function cb(e) {
+                    var self = this;
+                    expect(e).to.be.an('undefined');
+                    expect(self).to.equal(null);
+                    if(!count--)
+                        done()
+                }
+
+                testLog.onfinish(cb);
+
+                testLog(content);
+
+            });
+        })
+    })
+    it('asynchronously emits finish after logging is complete', function(done){
+        const EE = require('events');
+        const testEmitter = new EE();
+
+        var cb = sinon.stub();
+        cb.yields(completed);    // no such method but this is what I need
+
+        testEmitter.on('finish', cb.bind(null));
+
+        testEmitter.emit('finish');
+
+        function completed() {
+
+            expect(cb).to.have.been.calledOnce;
+            expect(cb).to.have.been.calledOn(null);
+            expect(cb).to.have.exactArgs();
+
+            done()
+        }
+
+    });
+    it('logs to stdout if no stream provided', function(done) {
+        const testLog = LogEvents().logger();
+        var _stdout = Hook_stdout();
+        testLog(content);
+        _stdout.unHook();
+        expect(_stdout.logOut).to.contain(content);
+        done()
+    });
+    it('logs to a stream if provided', function(done) {
+        const outFile   = './test/output/out-file.txt',
+              outStream = fs.createWriteStream(outFile),
+              testLog   = LogEvents().logger(outStream);
+        testLog(content);
+        testLog.onfinish(function() {
+            var s = new ManagedReadStream(outFile);
+            s.readAll(function(body) {
+                log.h1(body);
+                expect(body, "file contents").to.contain(testLog);
+            });
+            done()
+        })
+    });
+    it('logs to a stream if provided', function() {
+
+    })
+
 });
 describe('log-events', function() {
     const baseDir = './test';
@@ -163,11 +271,11 @@ describe('log-events', function() {
 
     });
 
-    describe('when binding with an array of descriptor objects', function(){
-        var objEvents = events.map(function(e){
+    describe('when binding with an array of descriptor objects', function() {
+        var objEvents = events.map(function(e) {
             return {
                 type: e,
-                action: function(){ log(this.name) }
+                action: function() { log(this.name) }
             }
         });
         const m = 4;
@@ -181,12 +289,12 @@ describe('log-events', function() {
             log(util.inspect(testEmitter));
             done();
         });
-        it('should remove listeners with add_remove === false', function(done) {
-            const objSampleEvents = sampleEvents.map(function(e){
+        it('should remove listeners with add_remove === null', function(done) {
+            const objSampleEvents = sampleEvents.map(function(e) {
                 return {
                     type: e,
-                    action: function(){ log(this.name) },
-                    add_remove: false
+                    action: function() { log(this.name) },
+                    add_remove: null
                 }
             });
 
@@ -205,11 +313,11 @@ describe('log-events', function() {
             done();
         });
         it('should add or remove listeners depending on add_remove', function(done) {
-            const objSampleEvents = sampleEvents.map(function(e){
+            const objSampleEvents = sampleEvents.map(function(e) {
                 return {
                     type: e,
-                    action: function(){ log(this.name) },
-                    add_remove: false
+                    action: function() { log(this.name) },
+                    add_remove: null
                 }
             });
 
@@ -229,7 +337,7 @@ describe('log-events', function() {
                 return {
                     type: e,
                     action: function() {log(this.name)},
-                    add_remove: false
+                    add_remove: null
                 }
             });
             sampleSet.forEach((s) => mixedEvents[s].add_remove = true);
@@ -255,8 +363,9 @@ describe('log-events', function() {
         it('should not affect unregistered listeners', function(done) {
             hook(testEmitter, events);
 
-            function unRegL(e){log.h2('testEmitter', 0, `unregistered ${e}`)}
-            events.forEach( e => testEmitter.on(e, unRegL));
+            function unRegL(e) {log.h2('testEmitter', 0, `unregistered ${e}`)}
+
+            events.forEach(e => testEmitter.on(e, unRegL));
 
             expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 2)).to.equal(true);
 
@@ -265,8 +374,8 @@ describe('log-events', function() {
             log.h1('Should log two of each');
             events.forEach(e => testEmitter.emit(e, e));
 
-            hook(testEmitter, events.map( function(e) {
-                return {type: e, add_remove: false}
+            hook(testEmitter, events.map(function(e) {
+                return {type: e, add_remove: null}
             }));
             expect(events.map(ex => testEmitter.listenerCount(ex)).every(x => x === 1)).to.equal(true);
             log.h1('After');
@@ -276,10 +385,10 @@ describe('log-events', function() {
             done();
         });
         it('should execute the passed action on the host object', function(done) {
-            var objEvents = events.map(function(e){
+            var objEvents = events.map(function(e) {
                 return {
                     type: e,
-                    action: function(){ log.h2(`${this.name} ${e}`) }
+                    action: function() { log.h2(`${this.name} ${e}`) }
                 }
             });
             hook(testEmitter, objEvents);
@@ -304,41 +413,44 @@ describe('log-events', function() {
         describe('binding output', function() {
 
             it('if the output is undefined, or falsey, it doesn\'t throw', function() {
-                expect(() => logEvents().open(testEmitter, events))
+                expect(() => LogEvents().open(testEmitter, events))
                     .to.not.throw();
             });
             it('if passed a write stream, it doesn\'t throw', function() {
-                expect(() => logEvents(outStream).open(testEmitter, events))
+                expect(() => LogEvents(outStream).open(testEmitter, events))
                     .to.not.throw();
             });
-            it('if passed a read stream, it throws ' + logEvents.errors.outputError, function() {
-                expect(function (){logEvents(inStream).open(testEmitter, events)})
-                    .to.throw(logEvents.errors.outputError);
+            it('if passed a read stream, it throws ' + LogEvents.errors.outputError, function() {
+                expect(function() {LogEvents(inStream).open(testEmitter, events)})
+                    .to.throw(LogEvents.errors.outputError);
             });
             it('if a valid path is provided, logs to a file', function() {
-                expect(() => logEvents(path.join(baseDir, outputDir, 'log.txt')).open(testEmitter, events))
+                expect(() => LogEvents(path.join(baseDir, outputDir, 'log.txt')).open(testEmitter, events))
                     .to.not.throw();
             })
         });
 
         describe('when the bound object emits events', function() {
-            var unhook_stdout, _logOut;
-            beforeEach(function(){
+            var unhook_stdout, _logOut, _stdout;
+            beforeEach(function() {
+                _stdout = Hook_stdout(x => '^' + x);
+/*
                 _logOut = "";
                 unhook_stdout = HOOKstdout(function(txt) {
                     _logOut += `${txt}`;
                     return '^' + txt;
                 });
+*/
             });
-            afterEach(function(){
-                unhook_stdout();
+            afterEach(function() {
+                _stdout.unHook();
             });
 
             it('if the output is undefined, or falsey, logs to stdout', function() {
                 testEmitter.name = 'output-to-stdout';
-                logEvents().open(testEmitter, events);
+                LogEvents().open(testEmitter, events);
                 events.forEach(e => testEmitter.emit(e, e));
-                var outLines =  _logOut.replace(/\n$/,"").split('\n');
+                var outLines = _stdout.logOut.replace(/\n$/, "").split('\n');
 
                 expect(outLines.length).to.equal(events.length);
 
@@ -346,7 +458,7 @@ describe('log-events', function() {
                     expect(outLines[i]).to.include(e)
                 });
 
-                log(`\n\n${_logOut}`);
+                log(`\n\n${_stdout.logOut._logOut}`);
             });
             it('if passed a write stream, streams h3 logs', function() {
 
@@ -357,3 +469,14 @@ describe('log-events', function() {
         })
     });
 });
+
+function Hook_stdout(transf) {
+    var self;
+    return self = {
+        unHook: HOOKstdout(function(txt) {
+            self.logOut += `${txt}`;
+            if(transf) return transf(txt);
+        }),
+        logOut: ""
+    }
+}

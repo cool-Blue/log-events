@@ -1,6 +1,6 @@
 {
   "name": "@cool-blue/logevents",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "description": "listens to an array of events on an object and outputs to a specified file or stream",
   "main": "index.js",
   "scripts": {
@@ -21,7 +21,8 @@
     "chai": "^1.10.0",
     "cross-env": "^2.0.0",
     "glob": "^7.0.5",
-    "mocha": "^2.5.3"
+    "mocha": "^2.5.3",
+    "sinon": "^1.17.5"
   },
   "repository": {
     "type": "git",
