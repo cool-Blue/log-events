@@ -141,7 +141,7 @@ describe('colourLog', function() {
             });
             it('calls asynchronously emits finish after logging is complete', function(done) {
                 const testLog = LogEvents().logger();
-                var cb = new CB(null,null, done)
+                // var cb = new CB(null,null, done)
                 var count = 1;
 
                 testLog(content);
@@ -159,24 +159,49 @@ describe('colourLog', function() {
                 testLog(content);
 
             });
+            it.skip('calls asynchronously emits finish after logging is complete', function(done) {
+                const testLog = LogEvents().logger();
+                var cb = sinon.spy(completed);
+                var count = 1;
+
+                testLog(content);
+
+                testLog.onfinish(cb);
+
+                testLog(content);
+
+                function completed() {
+
+                    expect(cb).to.have.been.calledTwice;
+                    expect(cb).to.have.been.calledOn(null);
+                    expect(cb).to.have.been.calledWithExactly();
+
+                    if(!count--)
+                        done()
+                }
+            });
         })
     })
     it('asynchronously emits finish after logging is complete', function(done){
         const EE = require('events');
         const testEmitter = new EE();
 
-        var cb = sinon.stub();
-        cb.yields(completed);    // no such method but this is what I need
+        var cb = sinon.spy(completed);
+
+        process.nextTick(() => testEmitter.emit('finish'));
 
         testEmitter.on('finish', cb.bind(null));
 
-        testEmitter.emit('finish');
+        process.nextTick(() => testEmitter.emit('finish'));
 
         function completed() {
 
-            expect(cb).to.have.been.calledOnce;
+            if(cb.callCount < 2)
+                return;
+
+            expect(cb).to.have.been.calledTwice;
             expect(cb).to.have.been.calledOn(null);
-            expect(cb).to.have.exactArgs();
+            expect(cb).to.have.been.calledWithExactly();
 
             done()
         }
