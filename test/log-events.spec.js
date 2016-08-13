@@ -112,127 +112,220 @@ describe('behaviour', function() {
 describe('colourLog', function() {
     const content = "this is a test y89dpencjk";
 
-    describe('signalling', function(done) {
-        var CB = function(context, argtypes, done) {
-            return function cb() {
-                var self = this,
-                    _args = [].slice.call(arguments);
-                argtypes = Array.isArray(argtypes);
-                if (argtypes === ['undefined'])
-                    expect(arguments.length).to.equal(0);
-                else
-                    expect(_args).to.eql(argtypes);
-                expect(self).to.equal(context);
-                done()
+    /**
+     * asynchronous sinon spy
+     * @factory
+     * @accessor calls - how many times it should be called
+     * @accessor context - what it should be called on
+     * @accessor args - what arguments to expect
+     * @returns {function} cb
+     */
+    function spyAsync() {
+        var AsyncSpy = (function(options) {
+
+            // private members
+            var _calls, _context, _args;
+
+            // constructor
+            function AsyncSpy() {
+                if(!(this instanceof AsyncSpy))
+                    return new AsyncSpy();
+
+                // init private state
+                _calls = 1;
+                _context = null;
+                _args = [];
+
+                // init public instance state
+
             }
-        }
-        describe('when logging to stdout, should signal with null context', function() {
+
+            // static public members
+
+            // accessors
+            AsyncSpy.prototype.calls = function recalls(n) {
+                if(typeof n === 'undefined') return this.n;
+                _calls = n;
+                return this;
+            };
+            AsyncSpy.prototype.context = function context(on) {
+                if(typeof on === 'undefined') return this.context;
+                _context = on;
+                return this;
+            };
+            AsyncSpy.prototype.args = function args(args) {
+                if(typeof args === 'undefined') return this.args;
+                _args = args;
+                return this;
+            };
+
+            // methods
+            AsyncSpy.prototype.cb = function cb(done) {
+
+                const CALLED_n = ['calledOnce', 'calledTwice', 'calledThrice'];
+
+                var _cb = sinon.spy(completed);
+
+                function completed(e) {
+
+                    if(e)
+                        console.dir(e);
+
+                    if(_cb.callCount < _calls)
+                        return;
+
+                    var expectToHaveBeen = expect(_cb).to.have.been;
+
+                    expectToHaveBeen[CALLED_n[_calls - 1]];
+                    expectToHaveBeen.calledOn(_context);
+                    expectToHaveBeen.calledWithExactly.apply(expectToHaveBeen, _args);
+
+                    if(done) done()
+                }
+
+                return _cb;
+            };
+
+            return AsyncSpy
+
+        })();
+
+        return new AsyncSpy();
+    }
+
+    describe('when logging to stdout', function() {
+        describe('signalling', function() {
+
             it('calls back after logging is complete with no args', function(done) {
                 const testLog = LogEvents().logger();
-
-                function cb(e) {
-                    var self = this;
-                    expect(e).to.be.an("undefined");
-                    expect(self).to.equal(null);
-                    done()
-                }
-
-                testLog(content, cb);
+                var cbSpy = spyAsync();
+                testLog(content, cbSpy.cb(done))
             });
-            it('calls asynchronously emits finish after logging is complete', function(done) {
+            
+            it('asynchronously emits finish after logging is complete', function(done) {
                 const testLog = LogEvents().logger();
-                // var cb = new CB(null,null, done)
-                var count = 1;
 
-                testLog(content);
+                var cb = spyAsync().calls(2).cb(done);
 
-                function cb(e) {
-                    var self = this;
-                    expect(e).to.be.an('undefined');
-                    expect(self).to.equal(null);
-                    if(!count--)
-                        done()
-                }
+                testLog(content);   // lexical placement should not matter
 
                 testLog.onfinish(cb);
 
                 testLog(content);
-
             });
-            it.skip('calls asynchronously emits finish after logging is complete', function(done) {
+        });
+        describe('output', function() {
+            it('logs to stdout if no stream provided', function(done) {
                 const testLog = LogEvents().logger();
-                var cb = sinon.spy(completed);
-                var count = 1;
-
+                var _stdout = Hook_stdout();
                 testLog(content);
+                _stdout.unHook();
+                expect(_stdout.logOut).to.contain(content);
+                done()
+            });
+        });
+    });
+    describe('when logging to a stream', function() {
+        describe('when passed a valid write stream', function(done) {
+            const outFile = './test/output/out-file.txt';
+            var outStream, testLog;
 
-                testLog.onfinish(cb);
+            beforeEach(function() {
+                outStream = fs.createWriteStream(outFile);
+                testLog = LogEvents().logger(outStream);
+            });
 
-                testLog(content);
+            describe('signalling', function() {
+                it('calls back after logging is complete with no args', function(done) {
+                    var cb = spyAsync().calls(1).context(outStream).cb(done);
 
-                function completed() {
+                    testLog(content, cb);
 
-                    expect(cb).to.have.been.calledTwice;
-                    expect(cb).to.have.been.calledOn(null);
-                    expect(cb).to.have.been.calledWithExactly();
+                });
+                it('asynchronously emits finish after logging is complete', function(done) {
+                    var cb = spyAsync().calls(2).context(outStream).cb(done);
 
-                    if(!count--)
+                    testLog(content);   // lexical placement should not matter
+
+                    testLog.onfinish(cb);
+
+                    testLog(content);
+                });
+            });
+            describe('output', function() {
+                it('logs to a stream if provided', function(done) {
+                    testLog(content);
+                    testLog.onfinish(function() {
+                        var s = new ManagedReadStream(outFile);
+                        s.readAll(function(body) {
+                            log.h1(body);
+                            expect(body, "file contents").to.contain(content);
+                        });
                         done()
-                }
+                    })
+                });
             });
-        })
-    })
-    it('asynchronously emits finish after logging is complete', function(done){
-        const EE = require('events');
-        const testEmitter = new EE();
+            describe('write stream error handling', function(done) {
+                it('it handles write errors', function(done) {
+                    var cbSpy = spyAsync()
+                        .context(outStream)
+                        .args([sinon.match.instanceOf(Error)]);
 
-        var cb = sinon.spy(completed);
+                    testLog.onerror(cbSpy.cb(done));
+                    testLog(content, then);
+                    outStream.end();
+                    function then() {
+                        // todo if no cb here -> stack overflow
+                        testLog(content, done);
+                    }
+                });
+                it('calls back on write error', function(done) {
 
-        process.nextTick(() => testEmitter.emit('finish'));
+                    done();
+                });
 
-        testEmitter.on('finish', cb.bind(null));
-
-        process.nextTick(() => testEmitter.emit('finish'));
-
-        function completed() {
-
-            if(cb.callCount < 2)
-                return;
-
-            expect(cb).to.have.been.calledTwice;
-            expect(cb).to.have.been.calledOn(null);
-            expect(cb).to.have.been.calledWithExactly();
-
-            done()
-        }
-
-    });
-    it('logs to stdout if no stream provided', function(done) {
-        const testLog = LogEvents().logger();
-        var _stdout = Hook_stdout();
-        testLog(content);
-        _stdout.unHook();
-        expect(_stdout.logOut).to.contain(content);
-        done()
-    });
-    it('logs to a stream if provided', function(done) {
-        const outFile   = './test/output/out-file.txt',
-              outStream = fs.createWriteStream(outFile),
-              testLog   = LogEvents().logger(outStream);
-        testLog(content);
-        testLog.onfinish(function() {
-            var s = new ManagedReadStream(outFile);
-            s.readAll(function(body) {
-                log.h1(body);
-                expect(body, "file contents").to.contain(testLog);
             });
-            done()
-        })
+
+        });
+        describe('when the write stream throws', function () {
+            const outFile = './nonexistent/output/out-file.txt';
+            var outStream, cbSpy;
+
+            beforeEach(function() {
+                outStream = fs.createWriteStream(outFile);
+                cbSpy = spyAsync()
+                    .context(outStream)
+                    .args([sinon.match.instanceOf(Error)]);
+            });
+
+            it('should catch file open error events', function(done) {
+                var testLog = LogEvents().logger(outStream);
+
+                testLog(content);   // will only cb once because error is from open
+
+                testLog.onerror(cbSpy.cb(done));
+
+                testLog(content);
+            });
+            it('should call back logger with file open error', function(done) {
+                var testLog = LogEvents().logger(outStream, cbSpy.cb(done));
+                testLog(content);
+            });
+            it('should call back log with file open error', function(done) {
+                var testLog = LogEvents().logger(outStream);
+                testLog(content, cbSpy.cb(done));
+            });
+            it('the log cb should overwrite the logger cb', function(done) {
+                var cbSpy2 = sinon.spy();
+                var testLog = LogEvents().logger(outStream, cbSpy2);
+                testLog(content, cbSpy.cb(function() {
+                        expect(cbSpy2.callCount).to.equal(0);
+                        done()
+                    }
+                ));
+            });
+        });
     });
-    it('logs to a stream if provided', function() {
-
-    })
-
 });
 describe('log-events', function() {
     const baseDir = './test';
@@ -459,13 +552,13 @@ describe('log-events', function() {
             var unhook_stdout, _logOut, _stdout;
             beforeEach(function() {
                 _stdout = Hook_stdout(x => '^' + x);
-/*
-                _logOut = "";
-                unhook_stdout = HOOKstdout(function(txt) {
-                    _logOut += `${txt}`;
-                    return '^' + txt;
-                });
-*/
+                /*
+                 _logOut = "";
+                 unhook_stdout = HOOKstdout(function(txt) {
+                 _logOut += `${txt}`;
+                 return '^' + txt;
+                 });
+                 */
             });
             afterEach(function() {
                 _stdout.unHook();
@@ -505,3 +598,4 @@ function Hook_stdout(transf) {
         logOut: ""
     }
 }
+

@@ -27,50 +27,112 @@ function stamp() {
     return ret
 }
 /**
- * Builds a logger complex based on default state
+ * Builds a $.logger complex based on default state
  * Usage
- * var colourLog = new ColourLog({
-        logger,
-        ansiStyles
+ * var colourLog = new ColourLogger({
+ *      $.logger,
+ *      ansiStyles
  * }).build()
-
+ *
+ * @typedef {{
+ *  logger: (Writestream|undefined),
+ *  ansiStyles: {object}
+ *  }} loggerState
  * @constructor
- * @returns a customisable, logger complex including customisation methods
- * @param {object} $        scope object with build state
- * @param {[function]} cb   callback after write
+ * @returns a customisable, $.logger complex including customisation methods
+ * @param {loggerState} $ - scope object with build state
+ * @param {[function]} _cb   callback after write
  * */
-function ColourLog($, cb) {
+function ColourLogger($, cb) {
 
     const DEF_ENC = null;
 
-    if (!(this instanceof ColourLog))
-        return new ColourLog($, cb);
+    if(!(this instanceof ColourLogger))
+        return new ColourLogger($, cb);
 
-    var _emitter = new EE(),
-    _baseLogger = $.logger
-            ? function(m, cb) {
-                $.logger.write(m + '\n', DEF_ENC, function(e) {
-                    if(e) {
-                        _emitter.emit('error', e);
-                        return cb && cb.call($.logger, e)
-                    }
-                    _emitter.emit('finish');
-                    return cb && cb.call($.logger)
-                })
+    /**
+     * Listeners are registered so that error events can be suppressed in
+     * favour of callbacks
+     * @type {EventEmitter}
+     * @private
+     */
+    var _emitter   = new EE(),
+        _cb        = cb,
+        _listeners = {};
+    _listeners.push = function(event, listener) {
+        if(this[event])
+            this[event].push(listener);
+        else
+            this[event] = [listener];
+    };
+
+    /**
+     * The logger when switched on
+     * Provides an async (CPS) wrapper for the write operation of the stream
+     * and emits events to subscribers of this log object
+     * @private {function}
+     */
+    var _baseLogger;
+
+    if($.logger) {
+        // need to trap errors that are other than write errors e.g. open
+        $.logger.on('error', function(e) {
+            // node will exit if the error event is emitted with no listeners
+            if(_listeners.error || !_cb)
+                process.nextTick(() => _emitter.emit('error', e));
+            // todo callback should be removed after firing?
+            if(_cb) {
+                process.nextTick(_cb.bind($.logger), e)
             }
-            : function(m, cb) {
-                console.log(m);
-                process.nextTick(() => _emitter.emit('finish'));
-                return cb && cb.call(null)
-            },
-        _logger     = _baseLogger;
+        });
+        /**
+         * Write to a stream
+         * @param m - the message to log
+         * @param cb - callback on $.logger
+         * Events should be bound to $.logger by the listener API on l
+         * @event error - emitted if $.logger.write calls back with error
+         * @event finish = emitted if $.logger.write calls back clean
+         * @private
+         */
+        _baseLogger = function(m, cb) {
+            $.logger.write(m + '\n', DEF_ENC,
+                /**
+                 * Pass on the call back and emit synthetic events
+                 */
+                function() {
+                    process.nextTick(() => _emitter.emit('finish'));
+                    if(cb) {
+                        process.nextTick(cb.bind($.logger))
+                    }
+                })
+        }
+    } else {
+        /**
+         * Write to stdio
+         * @param m
+         * @param cb
+         * @private
+         */
+        _baseLogger = function(m, cb) {
+            console.log(m);
+            process.nextTick(() => _emitter.emit('finish'));
+            if(cb) {
+                process.nextTick(cb.bind(null))
+            }
+        }
+    }
+
+    var _logger = _baseLogger;
 
     var _fancy    = true,
         transform = x => x;
 
     var endFlag;    // for tracking start end sequence
 
+    // todo encapsulate this
     function l(m, cb) {
+        // todo separate callbacks for stream and logger?
+        _cb = cb || _cb;
         _logger(transform(m), cb);
         endFlag = false;
         return this
@@ -95,11 +157,18 @@ function ColourLog($, cb) {
         return this
     };
     l.on = function() {
-        _logger = $._baseLogger;
+        _logger = _baseLogger;
         return this
     };
-    l.onfinish = function(listener){
-        _emitter.on('finish', listener.bind($.logger || null))
+    l.onfinish = function(listener) {
+        _emitter.on('finish', listener.bind($.logger || null));
+        _listeners.push('finish', listener);
+        return this
+    };
+    l.onerror = function(listener) {
+        _emitter.on('error', listener.bind($.logger || null));
+        _listeners.push('error', listener);
+        return this
     };
     l.$ = function() {
         return $
@@ -124,7 +193,6 @@ function ColourLog($, cb) {
             }, l
         )
     }
-
 }
 
 /**
@@ -144,7 +212,7 @@ function colourLog(logger, cb) {
         cls: () => `${CLEAR_SCREEN}`
     };
 
-    return new ColourLog({
+    return new ColourLogger({
         logger,
         ansiStyles
     }, cb).build()
