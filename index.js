@@ -8,13 +8,14 @@ const outputError = new TypeError('log-events un-supported output type');
 const collisionError = new ReferenceError('');
 
 var fs = require('fs');
+const path = require('path');
 var util = require('util');
 var now = require('moment');
 var _pad = require('left-pad');
 var stream = require('stream');
-var EE = require('events');
+const StyleLogger = require('./stylelogger');
 
-function stamp() {
+function stamp(f) {
     var t    = process.hrtime()[1].toString(),
         T    = now(Date.now()).format("HH:mm:ss"),
         msec = t.slice(0, 3),
@@ -23,177 +24,42 @@ function stamp() {
         pad  = '000';
     usec = pad.substring(0, pad.length - usec.length) + usec;
     nsec = pad.substring(0, pad.length - nsec.length) + nsec;
-    var ret = T + ":" + msec + ":" + usec + ":" + nsec;
-    return ret
+    stamp.ret = T + ":" + msec + ":" + usec + ":" + nsec;
+    return stamp
 }
-/**
- * Builds a $.logger complex based on default state
- * Usage
- * var colourLog = new ColourLogger({
- *      $.logger,
- *      ansiStyles
- * }).build()
- *
- * @typedef {{
- *  logger: (Writestream|undefined),
- *  ansiStyles: {object}
- *  }} loggerState
- * @constructor
- * @returns a customisable, $.logger complex including customisation methods
- * @param {loggerState} $ - scope object with build state
- * @param {[function]} _cb   callback after write
- * */
-function ColourLogger($, cb) {
+stamp.trace = function getTrace(belowFn) {
+    // todo register target file names so that others can be filtered from the stack
+    var oldLimit = Error.stackTraceLimit;
+    Error.stackTraceLimit = Infinity;
 
-    const DEF_ENC = null;
+    var dummyObject = {};
 
-    if(!(this instanceof ColourLogger))
-        return new ColourLogger($, cb);
-
-    /**
-     * Listeners are registered so that error events can be suppressed in
-     * favour of callbacks
-     * @type {EventEmitter}
-     * @private
-     */
-    var _emitter   = new EE(),
-        _cb        = cb,
-        _listeners = {};
-    _listeners.push = function(event, listener) {
-        if(this[event])
-            this[event].push(listener);
-        else
-            this[event] = [listener];
+    var v8Handler = Error.prepareStackTrace;
+    Error.prepareStackTrace = function(dummyObject, v8StackTrace) {
+        return v8StackTrace;
     };
+    Error.captureStackTrace(dummyObject, belowFn || getTrace);
 
-    /**
-     * The logger when switched on
-     * Provides an async (CPS) wrapper for the write operation of the stream
-     * and emits events to subscribers of this log object
-     * @private {function}
-     */
-    var _baseLogger;
+    var v8StackTrace = dummyObject.stack;
+    Error.prepareStackTrace = v8Handler;
+    Error.stackTraceLimit = oldLimit;
 
-    if($.logger) {
-        // need to trap errors that are other than write errors e.g. open
-        $.logger.on('error', function(e) {
-            // node will exit if the error event is emitted with no listeners
-            if(_listeners.error || !_cb)
-                process.nextTick(() => _emitter.emit('error', e));
-            // todo callback should be removed after firing?
-            if(_cb) {
-                process.nextTick(_cb.bind($.logger), e)
-            }
-        });
-        /**
-         * Write to a stream
-         * @param m - the message to log
-         * @param cb - callback on $.logger
-         * Events should be bound to $.logger by the listener API on l
-         * @event error - emitted if $.logger.write calls back with error
-         * @event finish = emitted if $.logger.write calls back clean
-         * @private
-         */
-        _baseLogger = function(m, cb) {
-            $.logger.write(m + '\n', DEF_ENC,
-                /**
-                 * Pass on the call back and emit synthetic events
-                 */
-                function() {
-                    process.nextTick(() => _emitter.emit('finish'));
-                    if(cb) {
-                        process.nextTick(cb.bind($.logger))
-                    }
-                })
+    var stackStruct = v8StackTrace.map(function(t) {
+        return {
+            calledOn: t.getThis(),
+            method: t.getMethodName(),
+            functionName: t.getFunctionName(),
+            fileName: path.relative(process.cwd(), t.getFileName()),
+            line: t.getLineNumber(),
+            column: t.getColumnNumber(),
+            position: t.getPosition(),
+            scriptName: t.getScriptNameOrSourceURL()
         }
-    } else {
-        /**
-         * Write to stdio
-         * @param m
-         * @param cb
-         * @private
-         */
-        _baseLogger = function(m, cb) {
-            console.log(m);
-            process.nextTick(() => _emitter.emit('finish'));
-            if(cb) {
-                process.nextTick(cb.bind(null))
-            }
-        }
-    }
-
-    var _logger = _baseLogger;
-
-    var _fancy    = true,
-        transform = x => x;
-
-    var endFlag;    // for tracking start end sequence
-
-    // todo encapsulate this
-    function l(m, cb) {
-        // todo separate callbacks for stream and logger?
-        _cb = cb || _cb;
-        _logger(transform(m), cb);
-        endFlag = false;
-        return this
-    }
-
-    l.fancy = function() {
-        _fancy = true;
-        return this
-    };
-    l.plain = function() {
-        _fancy = false;
-        return this
-    };
-    l.transform = function(t) {
-        if(typeof t === 'undefined')
-            return transform;
-        transform = t;
-        return this
-    };
-    l.off = function() {
-        _logger = function() {};
-        return this
-    };
-    l.on = function() {
-        _logger = _baseLogger;
-        return this
-    };
-    l.onfinish = function(listener) {
-        _emitter.on('finish', listener.bind($.logger || null));
-        _listeners.push('finish', listener);
-        return this
-    };
-    l.onerror = function(listener) {
-        _emitter.on('error', listener.bind($.logger || null));
-        _listeners.push('error', listener);
-        return this
-    };
-    l.$ = function() {
-        return $
-    };
-
-    this.build = function() {
-        return Object.keys($.ansiStyles).reduce(
-            function(res, k) {
-                var isStart = /.*start/i;
-                var isEnd = /.*end/i;
-                res[k] = function(m) {
-                    m = transform(typeof m === 'undefined' ? "" : m);
-                    var s = m.match(isStart);
-                    var e = m.match(isEnd);
-                    _logger(((s && !endFlag) ? "\n" : "")
-                        + (_fancy ? $.ansiStyles[k](m) : m)
-                        + (e ? "\n" : ""));
-                    endFlag = (s || e) ? e : endFlag;
-                    return this
-                };
-                return res
-            }, l
-        )
-    }
+    }),
+        top = stackStruct[0];
+    return this.ret + "\t" + path.relative(process.cwd(), top.fileName) + "#" + top.line
 }
+
 
 /**
  * Builds a logger complex with a pre-defined set of styles
@@ -201,7 +67,7 @@ function ColourLogger($, cb) {
  * @returns a customisable, logger complex including customisation methods
  * @param {[WriteStream]} logger
  * */
-function colourLog(logger, cb) {
+function colourLog(logger) {
 
     var ESC = '\x1b[', gEND = "m", allOFF = `${ESC}0m`, BOLD = 1, ITALIC = 3, UNDERLINE = 4, IMAGENEGATIVE = 7, FONTDEFAULT = 10, FONT2 = 11, FONT3 = 12, FONT4 = 13, FONT5 = 14, FONT6 = 15, IMAGEPOSITIVE = 27, BLACK = 30, RED = 31, GREEN = 32, YELLOW = 33, BLUE = 34, MAGENTA = 35, CYAN = 36, WHITE = 37, BG_BLACK = 40, BG_RED = 41, BG_GREEN = 42, BG_YELLOW = 43, BG_BLUE = 44, BG_MAGENTA = 45, BG_CYAN = 46, BG_WHITE = 47, CLEAR_SCREEN = `${ESC}2J`;
 
@@ -212,10 +78,10 @@ function colourLog(logger, cb) {
         cls: () => `${CLEAR_SCREEN}`
     };
 
-    return new ColourLogger({
+    return StyleLogger(
         logger,
         ansiStyles
-    }, cb).build()
+    )
 
 }
 function arrayicate(x) {
@@ -269,7 +135,7 @@ function LogEvents(output) {
 
                 function listener() {
                     var a;
-                    _log.h3(`${stamp()}\t${_pad(host.name, _w)} --> ${type}`);
+                    _log.h3(`${stamp().trace(listener)}\t${_pad(host.name, _w)} --> ${type}`);
                     if(action)
                         action.apply(host, arguments);
                     else if(a = _defaultActions[type])
