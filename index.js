@@ -7,13 +7,14 @@ module.exports = LogEvents;
 const outputError = new TypeError('log-events un-supported output type');
 const collisionError = new ReferenceError('');
 
-var fs = require('fs');
+const fs = require('fs');
 const path = require('path');
-var util = require('util');
-var now = require('moment');
-var _pad = require('left-pad');
-var stream = require('stream');
+const util = require('util');
+const now = require('moment');
+const _pad = require('left-pad');
+const stream = require('stream');
 const StyleLogger = require('./stylelogger');
+const builtinModules = require('builtin-modules');
 
 function stamp(f) {
     var t    = process.hrtime()[1].toString(),
@@ -28,7 +29,27 @@ function stamp(f) {
     return stamp
 }
 stamp.trace = function getTrace(belowFn) {
-    // todo register target file names so that others can be filtered from the stack
+    /*
+     Copyright (c) 2011 Felix Geisendörfer (felix@debuggable.com)
+
+     Permission is hereby granted, free of charge, to any person obtaining a copy
+     of the following software above the END Copyright line below and associated documentation files (the "Software"), to deal
+     in the Software without restriction, including without limitation the rights
+     to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+     copies of the Software, and to permit persons to whom the Software is
+     furnished to do so, subject to the following conditions:
+
+     The above copyright notice and this permission notice shall be included in
+     all copies or substantial portions of the Software.
+
+     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+     AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+     THE SOFTWARE.
+     */
     var oldLimit = Error.stackTraceLimit;
     Error.stackTraceLimit = Infinity;
 
@@ -43,22 +64,28 @@ stamp.trace = function getTrace(belowFn) {
     var v8StackTrace = dummyObject.stack;
     Error.prepareStackTrace = v8Handler;
     Error.stackTraceLimit = oldLimit;
-
+    /*
+    * END Copyright
+    * */
     var stackStruct = v8StackTrace.map(function(t) {
-        return {
-            calledOn: t.getThis(),
-            method: t.getMethodName(),
-            functionName: t.getFunctionName(),
-            fileName: path.relative(process.cwd(), t.getFileName()),
-            line: t.getLineNumber(),
-            column: t.getColumnNumber(),
-            position: t.getPosition(),
-            scriptName: t.getScriptNameOrSourceURL()
-        }
-    }),
-        top = stackStruct[0];
-    return this.ret + "\t" + path.relative(process.cwd(), top.fileName) + "#" + top.line
-}
+            return {
+                calledOn: t.getThis(),
+                method: t.getMethodName(),
+                functionName: t.getFunctionName(),
+                fileName: path.relative(process.cwd(), t.getFileName()),
+                line: t.getLineNumber(),
+                column: t.getColumnNumber(),
+            }
+        }),
+        appSites = stackStruct.filter(function(s) {
+            var fileName = s.fileName, name = fileName.match(/([^\\]+?)\.js$/)[1];
+            return !(fileName.search(/(?=(node_modules))|(?=(^native))/) > -1
+                || builtinModules.indexOf(name) > -1);
+        }),
+        top = appSites[0];
+    return this.ret + "\t" + path.relative(process.cwd(), top.fileName)
+        + "#" + top.line+ "#" + top.column
+};
 
 
 /**
@@ -82,7 +109,6 @@ function colourLog(logger) {
         logger,
         ansiStyles
     )
-
 }
 function arrayicate(x) {
     return x ? Array.isArray(x) ? x : [x] : x;

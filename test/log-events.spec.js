@@ -313,7 +313,6 @@ describe('log-events', function() {
         var outStream = fs.createWriteStream(path.join(baseDir, outputDir, 'output.txt'));
 
         describe('binding output', function() {
-
             it('if the output is undefined, or falsey, it doesn\'t throw', function() {
                 expect(() => LogEvents().open(testEmitter, events))
                     .to.not.throw();
@@ -334,6 +333,7 @@ describe('log-events', function() {
 
         describe('when the bound object emits events', function() {
             var unhook_stdout, _logOut, _stdout;
+
             beforeEach(function() {
                 _stdout = Hook_stdout(x => '^' + x);
                 /*

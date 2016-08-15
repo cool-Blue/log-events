@@ -1,6 +1,6 @@
 {
   "name": "@cool-blue/logevents",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "listens to an array of events on an object and outputs to a specified file or stream",
   "main": "index.js",
   "scripts": {
@@ -14,6 +14,7 @@
   "author": "cool.blue",
   "license": "MIT",
   "dependencies": {
+    "builtin-modules": "^1.1.1",
     "left-pad": "^1.1.1",
     "moment": "^2.14.1"
   },
