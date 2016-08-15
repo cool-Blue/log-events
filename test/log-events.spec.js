@@ -325,7 +325,7 @@ describe('log-events', function() {
                 expect(function() {LogEvents(inStream).open(testEmitter, events)})
                     .to.throw(LogEvents.errors.outputError);
             });
-            it('if a valid path is provided, logs to a file', function() {
+            it('if a valid path is provided, it doesn\'t throw', function() {
                 expect(() => LogEvents(path.join(baseDir, outputDir, 'log.txt')).open(testEmitter, events))
                     .to.not.throw();
             })

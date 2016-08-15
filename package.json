@@ -16,7 +16,8 @@
   "dependencies": {
     "builtin-modules": "^1.1.1",
     "left-pad": "^1.1.1",
-    "moment": "^2.14.1"
+    "moment": "^2.14.1",
+    "style-logger": "^1.0.1"
   },
   "devDependencies": {
     "chai": "^1.10.0",
